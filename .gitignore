@@ -1,0 +1,6 @@
+*.pk
+*.csv
+*.jpg
+*.png
+Data/*
+*.mat
