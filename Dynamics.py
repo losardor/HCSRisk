@@ -21,3 +21,14 @@ def LoadMatData(path="./", docIds = np.arange(50), verbose = False):
     np.fill_diagonal(adj,0)
     mean_patient = patient['MP'][docIds]
     return adj, mean_patient
+
+
+def remove_doctors(doctors, N, predetermined = False):
+    '''
+    Selects random doctors to be removed
+    '''
+
+    if predetermined:
+        return doctors[predetermined]
+    else:
+        return np.random.choice(doctors, N)
