@@ -32,3 +32,20 @@ def remove_doctors(doctors, N, predetermined = False):
         return doctors[predetermined]
     else:
         return np.random.choice(doctors, N)
+
+class doctors:
+    '''
+    Class with properties and methods relating to the set of doctors
+    '''
+
+    def __init__(self, docNum, mean_patient, C, ids = False):
+
+        if ids:
+            self.originalID = ids
+            self.NumOfPatients = mean_patient[ids].astype(int).squeeze()
+        else:
+            self.originalID = np.arange(docNum).squeeze()
+            self.NumOfPatients = mean_patient[np.arange(docNum).squeeze()].astype(int).squeeze()
+        self.capactiy = self.NumOfPatients*(1+C)
+
+    
