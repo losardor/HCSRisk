@@ -46,6 +46,44 @@ class doctors:
         else:
             self.originalID = np.arange(docNum).squeeze()
             self.NumOfPatients = mean_patient[np.arange(docNum).squeeze()].astype(int).squeeze()
-        self.capactiy = self.NumOfPatients*(1+C)
+        self.Capacity = self.NumOfPatients*(1+C)
 
     
+    def not_disconnected(self, adj, failed, verbose=False):
+        '''
+        Checks whether the doctors are connected to any other throught the patient-sharing network.
+        If not they are removed since they will not participate in the simulation (ignoring teleporation)
+        '''
+        lost=0
+        hasOutDegree = np.any(adj, axis=0).transpose()
+        hasInDegree = np.any(adj, axis=1)
+        if verbose:
+            print(hasInDegree.shape, hasOutDegree.shape)
+        not_disconnected = np.asarray(np.logical_and(hasOutDegree,hasInDegree)).squeeze()
+        self.originalID = self.originalID[not_disconnected.squeeze()]
+        if verbose:
+            print(self.originalID)
+        disconnectedFailed = np.logical_not(np.in1d(failed, self.originalID))
+        lost+=self.NumOfPatients[failed[disconnectedFailed]].sum()
+        failed = failed[np.logical_not(disconnectedFailed)]
+        if verbose:
+            print('lost:',lost, 'Not disconnected out of the failed:', failed)
+        self.NumOfPatients = self.NumOfPatients[not_disconnected.squeeze()]
+        self.Capacity = self.Capacity[not_disconnected.squeeze()]
+        return lost, failed
+
+    def reindex(self, verbose = False, failed = []):
+        '''
+        Make a new index that starts at 0 and counts up to the active connected doctors.
+        It returns a map from the old indices to the new (stored under IdForSimulation)
+        '''
+        self.IdForSimulation = np.arange(self.originalID.shape[0])
+        if verbose:
+            print("original failed: ", failed)
+        doc2sim = {Id:newID for Id, newID in zip(self.originalID, self.IdForSimulation)}
+        if verbose:
+            print(doc2sim)
+        failed = [doc2sim[f] for f in failed if f in doc2sim.keys()] + [(f,False) for f in failed if f not in doc2sim.keys()]
+        if verbose:
+            print(self.IdForSimulation, failed)
+        return doc2sim
