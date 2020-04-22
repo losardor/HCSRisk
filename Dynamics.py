@@ -3,6 +3,7 @@ from scipy.io import loadmat
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import sys
 
 def LoadMatData(bezID, path="./", verbose = False):
     '''
@@ -70,15 +71,16 @@ class doctors:
         lost=0
         hasOutDegree = np.any(adj, axis=0).transpose()
         hasInDegree = np.any(adj, axis=1)
-        if verbose:
-            print(hasInDegree.shape, hasOutDegree.shape)
         not_disconnected = np.asarray(np.logical_and(hasOutDegree,hasInDegree)).squeeze()
+        newFailed = np.array(np.in1d(self.originalID,failed) ).nonzero()[0]
+        disconnectedFailed = newFailed[np.logical_not(np.in1d(self.originalID[newFailed],self.originalID[not_disconnected]))]
+        if verbose:
+            print(hasInDegree.shape, hasOutDegree.shape, not_disconnected, disconnectedFailed)
+        lost+=self.NumOfPatients[disconnectedFailed].sum()
         self.originalID = self.originalID[not_disconnected.squeeze()]
         if verbose:
-            print(self.originalID)
-        disconnectedFailed = np.logical_not(np.in1d(failed, self.originalID))
-        lost+=self.NumOfPatients[failed[disconnectedFailed]].sum()
-        failed = failed[np.logical_not(disconnectedFailed)]
+            print(self.originalID, disconnectedFailed, self.NumOfPatients)
+        failed = failed[np.logical_not(np.in1d(newFailed, disconnectedFailed))]
         if verbose:
             print('lost:',lost, 'Not disconnected out of the failed:', failed)
         self.NumOfPatients = self.NumOfPatients[not_disconnected.squeeze()]
@@ -92,6 +94,7 @@ class doctors:
         '''
         self.IdForSimulation = np.arange(self.originalID.shape[0])
         if verbose:
+            print('original ID: ', self.originalID)
             print("original failed: ", failed)
         doc2sim = {Id:newID for Id, newID in zip(self.originalID, self.IdForSimulation)}
         if verbose:
@@ -114,7 +117,11 @@ def vectorized(prob_matrix, items, oldpositions, verbose=False):
         print("k-shape: ",k.shape, "prob_matrik-shape: ",prob_matrix.shape, 
             "oldpositions-shape: ",oldpositions.shape, 
             "no_outlinks-IDs: ",np.nonzero(k == prob_matrix.shape[0]))
-    k[k == prob_matrix.shape[0]] = oldpositions[np.asarray(k == prob_matrix.shape[0]).squeeze()] #necessary in the case there is no ourlink
+    try:
+        k[k == prob_matrix.shape[0]] = oldpositions[np.asarray(k == prob_matrix.shape[0]).squeeze()] #necessary in the case there is no outlink
+    except:
+        print(k,prob_matrix.shape[0],oldpositions)
+        sys.exit(1)
     return items[k]
 
 
@@ -122,6 +129,9 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
 
     prob_weights = adj[patient["locations"][ patient["status"].astype(bool)] ] #Create Transport matrix
     #Assign target nodes to patient
+    if prob_weights.shape[0] == 1:
+        patient["status"] = np.zeros(patient["locations"].shape).astype(bool) #the single patient creates indexing problems while note being relevant
+        return patient, docs, lost
     targets = vectorized(prob_weights.transpose(), docs.IdForSimulation, 
                          patient["locations"][ patient["status"].astype(bool)] , verbose)
     teleport = np.random.random(targets.shape)<alpha #Choose whether to teleport
@@ -131,8 +141,11 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
     # docs.incoming, _ = np.histogram(patient["locations"][ patient["status"].astype(bool)], 
     #     bins=np.arange(len(docs.IdForSimulation)+1))
     docs.incoming = np.zeros(docs.IdForSimulation.shape)
+    at_doc = {}
     for doc in docs.IdForSimulation:
-        docs.incoming[doc] = len(np.asarray(patient["locations"][ patient["status"].astype(bool)] == doc).nonzero()[0])
+        #Determine indices of patient at location
+        at_doc[doc] = np.asarray(patient["locations"][ patient["status"].astype(bool)] == doc).nonzero()[0]
+        docs.incoming[doc] = len(at_doc[doc])
     docs.availability = (docs.Capacity-docs.NumOfPatients).squeeze().astype(int) #Calculate current availability
     docs.availability[docs.availability<0] = 0
     if verbose:
@@ -154,13 +167,11 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
     for doc in docs.IdForSimulation: 
         # Skip doctors with now patient docs.incoming"]
         if docs.incoming[doc] and not Absorbed[doc] and docs.availability[doc] != 0:
-            #Determine indices of patient at location
-            at_doc = np.asarray(patient["locations"][ patient["status"].astype(bool)] == doc).nonzero()[0] 
             #Randomly pick the patient
             try:
-                kept = np.random.choice(at_doc, size = docs.availability[doc], replace = False)
+                kept = np.random.choice(at_doc[doc], size = docs.availability[doc], replace = False)
             except:
-                print('#at_doc: ',len(at_doc), 'doc availability: ', docs.availability[doc], 
+                print('#at_doc: ',len(at_doc[doc]), 'doc availability: ', docs.availability[doc], 
                 '#incoming',docs.incoming[doc], 'doc: ',doc)
             if verbose:
                 print("at_doc-shape: ", at_doc.shape, "availability: ", docs.availability[doc].astype(int))
