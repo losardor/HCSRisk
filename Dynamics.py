@@ -128,7 +128,11 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
     targets[teleport] = np.random.choice(docs.IdForSimulation) #Teleport patient
     patient["locations"][ patient["status"].astype(bool)] = targets.squeeze() #Update locations
     #Count docs.incoming"] patient
-    docs.incoming, _ = np.histogram(targets, bins=np.arange(len(docs.IdForSimulation)+1)) 
+    # docs.incoming, _ = np.histogram(patient["locations"][ patient["status"].astype(bool)], 
+    #     bins=np.arange(len(docs.IdForSimulation)+1))
+    docs.incoming = np.zeros(docs.IdForSimulation.shape)
+    for doc in docs.IdForSimulation:
+        docs.incoming[doc] = len(np.asarray(patient["locations"][ patient["status"].astype(bool)] == doc).nonzero()[0])
     docs.availability = (docs.Capacity-docs.NumOfPatients).squeeze().astype(int) #Calculate current availability
     docs.availability[docs.availability<0] = 0
     if verbose:
@@ -144,7 +148,6 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
     #Fill up doctors that have not absorbed the load
     docs.NumOfPatients[np.logical_not(Absorbed)] = docs.Capacity[np.logical_not(Absorbed)]
     #Patients at doctor that have absorbed can stop
-    patient["status"][ np.in1d(patient["locations"], docs.IdForSimulation[Absorbed]) ] = 0 
     
     patient["displacements"][ patient["status"].astype(bool) ]+=1 #Update number of displacements
     # Randomply pick patient that can stay at doctors that have filled up
@@ -154,13 +157,18 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
             #Determine indices of patient at location
             at_doc = np.asarray(patient["locations"][ patient["status"].astype(bool)] == doc).nonzero()[0] 
             #Randomly pick the patient
-            kept = np.random.choice(at_doc, size = docs.availability[doc], replace = False)
+            try:
+                kept = np.random.choice(at_doc, size = docs.availability[doc], replace = False)
+            except:
+                print('#at_doc: ',len(at_doc), 'doc availability: ', docs.availability[doc], 
+                '#incoming',docs.incoming[doc], 'doc: ',doc)
             if verbose:
                 print("at_doc-shape: ", at_doc.shape, "availability: ", docs.availability[doc].astype(int))
                 print(kept.size)
             patient["status"][kept] = 0 #Change status of the lucky ones
+    patient["status"][ np.in1d(patient["locations"], docs.IdForSimulation[Absorbed]) ] = 0 
     patient["status"][ patient["displacements"]>=maxSteps ] = 0
     lost+= np.array(patient["displacements"]>=maxSteps).sum()
     if verbose:
         print("Active Patients",patient["status"].sum())
-    return patient, doctors, lost
+    return patient, docs, lost
