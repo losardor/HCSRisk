@@ -149,7 +149,7 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
     docs.availability = (docs.Capacity-docs.NumOfPatients).squeeze().astype(int) #Calculate current availability
     docs.availability[docs.availability<0] = 0
     if verbose:
-        sns.distplot(docs.availability)
+        plt.bar(np.arange(len(docs.NumOfPatients)), docs.availability)
         plt.show()
     #Compute how many patient will need to continue their search
     docs.Excess = docs.incoming-docs.availability 
@@ -168,13 +168,9 @@ def step(patient, adj, docs, lost, alpha = 0.15, maxSteps = 11, verbose = False)
         # Skip doctors with now patient docs.incoming"]
         if docs.incoming[doc] and not Absorbed[doc] and docs.availability[doc] != 0:
             #Randomly pick the patient
-            try:
-                kept = np.random.choice(at_doc[doc], size = docs.availability[doc], replace = False)
-            except:
-                print('#at_doc: ',len(at_doc[doc]), 'doc availability: ', docs.availability[doc], 
-                '#incoming',docs.incoming[doc], 'doc: ',doc)
+            kept = np.random.choice(at_doc[doc], size = docs.availability[doc], replace = False)
             if verbose:
-                print("at_doc-shape: ", at_doc.shape, "availability: ", docs.availability[doc].astype(int))
+                print("at_doc-shape: ", at_doc[doc].shape, "availability: ", docs.availability[doc].astype(int))
                 print(kept.size)
             patient["status"][kept] = 0 #Change status of the lucky ones
     patient["status"][ np.in1d(patient["locations"], docs.IdForSimulation[Absorbed]) ] = 0 
